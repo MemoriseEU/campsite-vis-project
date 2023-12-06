@@ -37,6 +37,28 @@
       console.log("minYear", minYear, "maxYear", maxYear);
     </script>
 
+    <script>
+      const mapYears = [1930, 1938, 1945];
+      const mapLayers = {};
+
+      for (const year of mapYears) {
+        fetch(`./maps/world_${year}.geojson`)
+          .then((res) => {
+            return res.json();
+          })
+          .then((data) => {
+            const newData = {
+              ...data,
+              features: data.features.map((e, i) => {
+                e.id = i;
+                return e;
+              }),
+            };
+            mapLayers[year.toString()] = newData;
+          });
+      }
+    </script>
+
     <div style="width: 800px; height: 800px">
       <div id="map" style="width: 800px; height: 600px"></div>
       <div class="slidecontainer">
@@ -51,10 +73,31 @@
           oninput="updateSlider(this.value)"
         />
         <div id="range-value"></div>
+        <div id="country-value"></div>
       </div>
     </div>
 
     <script>
+      const findClosestNumber = (arr, target) => {
+        if (!arr || arr.length === 0) {
+          return null; // Handle empty array
+        }
+
+        let closestNumber = arr[0];
+        let closestDifference = Math.abs(target - arr[0]);
+
+        for (let i = 1; i < arr.length; i++) {
+          const currentDifference = Math.abs(target - arr[i]);
+
+          if (currentDifference < closestDifference) {
+            closestNumber = arr[i];
+            closestDifference = currentDifference;
+          }
+        }
+
+        return closestNumber;
+      };
+
       const updateSlider = (val) => {
         const newData = {
           type: "FeatureCollection",
@@ -70,6 +113,17 @@
         elem.innerHTML = `Year: 19${val}`;
 
         map.getSource("camps").setData(newData);
+
+        const closestMapYear = findClosestNumber(
+          mapYears,
+          1900 + parseInt(val)
+        );
+        map.getSource("countries").setData(mapLayers[closestMapYear]);
+      };
+
+      const updateCountry = (country) => {
+        const elem = document.getElementById("country-value");
+        elem.innerHTML = country;
       };
 
       // TO MAKE THE MAP APPEAR YOU MUST
@@ -79,12 +133,88 @@
         "pk.eyJ1Ijoidm9rYWJlbHNhbGF0IiwiYSI6ImNrNjVnOGFudTBhcW4zZW80ODFsNm00eGwifQ.2Lu5Sx3Fm8lEtLZMz8qwEg";
       const map = new mapboxgl.Map({
         container: "map", // container ID
-        style: "mapbox://styles/mapbox/streets-v12", // style URL
+        style: "mapbox://styles/mapbox/light-v10", // style URL
         center: [11, 52], // starting position [lng, lat]
         zoom: 3, // starting zoom
       });
 
+      var hoveredStateId = null;
+
       map.on("load", () => {
+        map.getStyle().layers.forEach(function (layer) {
+          map.setLayoutProperty(layer.id, "visibility", "none");
+        });
+
+        map.addSource("countries", {
+          type: "geojson",
+          data: mapLayers["1930"],
+        });
+
+        // The feature-state dependent fill-opacity expression will render the hover effect
+        //  when a feature's hover state is set to true.
+        map.addLayer({
+          id: "fill",
+          type: "fill",
+          source: "countries",
+          layout: {},
+          paint: {
+            "fill-color": [
+              "case",
+              ["boolean", ["feature-state", "hover"], false],
+              "gray",
+              "gray",
+            ],
+            "fill-opacity": [
+              "case",
+              ["boolean", ["feature-state", "hover"], false],
+              1,
+              0.5,
+            ],
+            "fill-outline-color": "white",
+          },
+        });
+
+        map.addLayer({
+          id: "line",
+          type: "line",
+          source: "countries",
+          layout: {},
+          paint: {
+            "line-color": "black",
+            "line-width": 2,
+          },
+        });
+
+        // When the user moves their mouse over the counties-fill layer, we'll update the
+        // feature state for the feature under the mouse.
+        map.on("mousemove", "fill", function (e) {
+          if (e.features.length > 0) {
+            if (hoveredStateId) {
+              map.setFeatureState(
+                {
+                  source: "countries",
+                  id: hoveredStateId,
+                },
+                {
+                  hover: false,
+                }
+              );
+            }
+            hoveredStateId = e.features[0].id;
+            map.setFeatureState(
+              {
+                source: "countries",
+                id: hoveredStateId,
+              },
+              {
+                hover: true,
+              }
+            );
+
+            updateCountry(e.features[0].properties.NAME);
+          }
+        });
+
         // Add a data source containing GeoJSON data.
         map.addSource("camps", {
           type: "geojson",
@@ -172,7 +302,7 @@
           });
       });
 
-      // When a click event occurs on a feature in
+      /*       // When a click event occurs on a feature in
       // the unclustered-point layer, open a popup at
       // the location of the feature, with
       // description HTML from its properties.
@@ -192,7 +322,7 @@
           .setLngLat(coordinates)
           .setHTML(`magnitude: ${mag}<br>Was there a tsunami?: ${tsunami}`)
           .addTo(map);
-      });
+      }); */
 
       map.on("mouseenter", "clusters", () => {
         map.getCanvas().style.cursor = "pointer";
