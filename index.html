@@ -22,6 +22,15 @@
       input {
         width: 100%;
       }
+
+      #myRange {
+        /*  background: gray; */
+        border: solid 1px gray;
+        border-radius: 8px;
+        outline: none;
+        -webkit-appearance: none;
+        accent-color: #a41616;
+      }
     </style>
   </head>
 
@@ -153,7 +162,11 @@
         .attr("height", function (d) {
           return height - y(d.count);
         })
-        .attr("fill", "#69b3a2");
+        .attr("fill", (d) => {
+          if (d.count > 750) return "#5d1414";
+          if (d.count > 100) return "#a41616";
+          else return "#e51818";
+        });
 
       const findClosestNumber = (arr, target) => {
         if (!arr || arr.length === 0) {
@@ -188,6 +201,8 @@
           1900 + parseInt(val)
         );
         map.getSource("countries").setData(mapLayers[closestMapYear]);
+
+        updateCountry("");
       };
 
       const updateCountry = (country) => {
@@ -307,11 +322,11 @@
             "circle-color": [
               "step",
               ["get", "point_count"],
-              "#51bbd6",
+              "#e51818",
               100,
-              "#f1f075",
+              "#a41616",
               750,
-              "#f28cb1",
+              "#5d1414",
             ],
             "circle-radius": [
               "step",
@@ -335,6 +350,9 @@
             "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
             "text-size": 12,
           },
+          paint: {
+            "text-color": "#ffffff",
+          },
         });
 
         map.addLayer({
@@ -343,10 +361,10 @@
           source: "camps",
           filter: ["!", ["has", "point_count"]],
           paint: {
-            "circle-color": "#11b4da",
+            "circle-color": "#e51818",
             "circle-radius": 4,
             "circle-stroke-width": 1,
-            "circle-stroke-color": "#fff",
+            "circle-stroke-color": "#000",
           },
         });
 
