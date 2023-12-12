@@ -8,7 +8,16 @@
 
     <script src="https://d3js.org/d3.v4.js"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/holtzy/D3-graph-gallery@master/LIB/d3.layout.cloud.js"></script>
     <script src="./SS_Camps_Definitive.js"></script>
+    <script src="./word_counts.js"></script>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="//fonts.googleapis.com/css?family=Droid+Serif"
+    />
+    <link href="https://fonts.cdnfonts.com/css/open-sans" rel="stylesheet" />
     <link
       href="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css"
       rel="stylesheet"
@@ -29,13 +38,15 @@
         border-radius: 8px;
         outline: none;
         -webkit-appearance: none;
-        accent-color: #a41616;
+        accent-color: #4c58e0;
       }
     </style>
   </head>
 
   <body>
     <script>
+      var overAllMargin = 40;
+
       let minYear = 9999;
       let maxYear = -9999;
       for (feat of data.features) {
@@ -69,22 +80,54 @@
       }
     </script>
 
-    <div style="width: 800px; height: 800px">
-      <div id="map" style="width: 800px; height: 600px"></div>
-      <div id="my_dataviz"></div>
-      <div class="slidecontainer">
-        <input
-          type="range"
-          min="30"
-          max="55"
-          value="30"
-          class="slider"
-          id="myRange"
-          onchange="updateSlider(this.value)"
-          oninput="updateSlider(this.value)"
-        />
-        <div id="range-value"></div>
-        <div id="country-value"></div>
+    <div>
+      <div
+        style="
+          font-family: Droid Serif;
+          font-size: xx-large;
+          width: 100%;
+          text-align: center;
+        "
+      >
+        Dashboard for Understanding Nazi Persecution and the Holocaust
+      </div>
+      <div
+        style="
+          display: grid;
+          grid-template-columns: auto auto;
+          grid-template-rows: auto auto;
+        "
+      >
+        <div>
+          <div id="map" style="width: 50vw; height: 50vh"></div>
+        </div>
+        <div>
+          <div id="timeline"></div>
+          <div style="margin-top: 20px" class="slidecontainer">
+            <input
+              type="range"
+              min="30"
+              max="55"
+              value="30"
+              class="slider"
+              id="myRange"
+              onchange="updateSlider(this.value)"
+              oninput="updateSlider(this.value)"
+            />
+            <div
+              style="font-family: Open Sans, sans-serif"
+              id="range-value"
+            ></div>
+            <div
+              style="font-family: Open Sans, sans-serif"
+              id="country-value"
+            ></div>
+          </div>
+          <div style="margin-top: 20px" id="steamgraph"></div>
+        </div>
+        <div>
+          <div id="wordcloud"></div>
+        </div>
       </div>
     </div>
 
@@ -95,7 +138,7 @@
           features: data.features.filter((d) => {
             return (
               parseInt(d.properties.YYYY_OPEN) <= year &&
-              parseInt(d.properties.YYYY_CLOSE) < year
+              year < parseInt(d.properties.YYYY_CLOSE)
             );
           }),
         };
@@ -113,14 +156,17 @@
 
       console.log(barChartData);
 
+      const visWidth = window.innerWidth / 2;
+
       // set the dimensions and margins of the graph
-      var margin = { top: 0, right: 0, bottom: 30, left: 0 },
-        width = 800 - margin.left - margin.right,
-        height = 200 - margin.top - margin.bottom;
+      let margin = { top: 0, right: 0, bottom: 30, left: 0 },
+        width = visWidth - margin.left - margin.right - overAllMargin;
+      height =
+        window.innerHeight / 4 - margin.top - margin.bottom - overAllMargin;
 
       // append the svg object to the body of the page
       var svg = d3
-        .select("#my_dataviz")
+        .select("#timeline")
         .append("svg")
         .attr("width", width + margin.left + margin.right)
         .attr("height", height + margin.top + margin.bottom)
@@ -143,7 +189,7 @@
         .style("text-anchor", "end");
 
       // Add Y axis
-      var y = d3.scaleLinear().domain([0, 1000]).range([height, 0]);
+      var y = d3.scaleLinear().domain([0, 560]).range([height, 0]);
       svg.append("g").call(d3.axisLeft(y));
 
       // Bars
@@ -163,9 +209,9 @@
           return height - y(d.count);
         })
         .attr("fill", (d) => {
-          if (d.count > 750) return "#5d1414";
-          if (d.count > 100) return "#a41616";
-          else return "#e51818";
+          if (d.count > 750) return "#0038B8";
+          if (d.count > 100) return "#4C58E0";
+          else return "#797BFF";
         });
 
       const findClosestNumber = (arr, target) => {
@@ -177,11 +223,13 @@
         let closestDifference = Math.abs(target - arr[0]);
 
         for (let i = 1; i < arr.length; i++) {
-          const currentDifference = Math.abs(target - arr[i]);
+          if (arr[i] < target) {
+            const currentDifference = Math.abs(target - arr[i]);
 
-          if (currentDifference < closestDifference) {
-            closestNumber = arr[i];
-            closestDifference = currentDifference;
+            if (currentDifference < closestDifference) {
+              closestNumber = arr[i];
+              closestDifference = currentDifference;
+            }
           }
         }
 
@@ -196,10 +244,8 @@
 
         map.getSource("camps").setData(newData);
 
-        const closestMapYear = findClosestNumber(
-          mapYears,
-          1900 + parseInt(val)
-        );
+        let closestMapYear = findClosestNumber(mapYears, 1900 + parseInt(val));
+        console.log("closestMapYear", closestMapYear);
         map.getSource("countries").setData(mapLayers[closestMapYear]);
 
         updateCountry("");
@@ -323,11 +369,11 @@
             "circle-color": [
               "step",
               ["get", "point_count"],
-              "#e51818",
+              "#797BFF",
               100,
-              "#a41616",
+              "#4C58E0",
               750,
-              "#5d1414",
+              "#0038B8",
             ],
             "circle-radius": [
               "step",
@@ -362,7 +408,7 @@
           source: "camps",
           filter: ["!", ["has", "point_count"]],
           paint: {
-            "circle-color": "#e51818",
+            "circle-color": "#797BFF",
             "circle-radius": 4,
             "circle-stroke-width": 1,
             "circle-stroke-color": "#000",
@@ -418,6 +464,240 @@
       map.on("mouseleave", "clusters", () => {
         map.getCanvas().style.cursor = "";
       });
+    </script>
+
+    <script>
+      // set the dimensions and margins of the graph
+      let steamGraphMargin = { top: 20, right: 20, bottom: 0, left: 20 };
+      let steamGraphWidth =
+        window.innerWidth / 2 -
+        steamGraphMargin.left -
+        steamGraphMargin.right -
+        overAllMargin;
+      let steamGraphHeight =
+        window.innerHeight / 4 -
+        steamGraphMargin.top -
+        steamGraphMargin.bottom -
+        overAllMargin;
+
+      // append the svg object to the body of the page
+      var svg = d3
+        .select("#steamgraph")
+        .append("svg")
+        .attr(
+          "width",
+          steamGraphWidth + steamGraphMargin.left + steamGraphMargin.right
+        )
+        .attr(
+          "height",
+          steamGraphHeight + steamGraphMargin.top + steamGraphMargin.bottom
+        )
+        .append("g")
+        .attr(
+          "transform",
+          "translate(" +
+            steamGraphMargin.left +
+            "," +
+            steamGraphMargin.top +
+            ")"
+        );
+
+      // Parse the Data
+      d3.csv(
+        "https://raw.githubusercontent.com/holtzy/data_to_viz/master/Example_dataset/5_OneCatSevNumOrdered_wide.csv",
+        function (data) {
+          // List of groups = header of the csv files
+          var keys = data.columns.slice(1);
+
+          // Add X axis
+          var x = d3
+            .scaleLinear()
+            .domain([1930, 1960])
+            .range([0, steamGraphWidth]);
+          svg
+            .append("g")
+            .attr("transform", "translate(0," + steamGraphHeight * 0.8 + ")")
+            .call(
+              d3
+                .axisBottom(x)
+                .tickSize(-steamGraphHeight * 0.7)
+                .tickValues([1930, 1940, 1950, 1960])
+            )
+            .select(".domain")
+            .remove();
+          // Customization
+          svg.selectAll(".tick line").attr("stroke", "#b8b8b8");
+
+          // Add X axis label:
+          svg
+            .append("text")
+            .attr("text-anchor", "end")
+            .attr("x", steamGraphWidth)
+            .attr("y", steamGraphHeight - 30)
+            .text("Time (year)");
+
+          // Add Y axis
+          var y = d3
+            .scaleLinear()
+            .domain([-100000, 100000])
+            .range([steamGraphHeight - 50, 0]);
+
+          // color palette
+          var color = d3
+            .scaleOrdinal()
+            .domain(keys)
+            .range(["#797BFF", "#4C58E0", "#0038B8"]);
+
+          //stack the data?
+          var stackedData = d3
+            .stack()
+            .offset(d3.stackOffsetSilhouette)
+            .keys(keys)(data);
+
+          // create a tooltip
+          var Tooltip = svg
+            .append("text")
+            .attr("x", 0)
+            .attr("y", 0)
+            .style("opacity", 0)
+            .style("font-size", 17);
+
+          // Three function that change the tooltip when user hover / move / leave a cell
+          var mouseover = function (d) {
+            Tooltip.style("opacity", 1);
+            d3.selectAll(".myArea").style("opacity", 0.2);
+            d3.select(this).style("stroke", "black").style("opacity", 1);
+          };
+          var mousemove = function (d, i) {
+            grp = keys[i];
+            Tooltip.text(grp);
+          };
+          var mouseleave = function (d) {
+            Tooltip.style("opacity", 0);
+            d3.selectAll(".myArea").style("opacity", 1).style("stroke", "none");
+          };
+
+          // Area generator
+          var area = d3
+            .area()
+            .x(function (d) {
+              return x(d.data.year);
+            })
+            .y0(function (d) {
+              return y(d[0]);
+            })
+            .y1(function (d) {
+              return y(d[1]);
+            });
+
+          // Show the areas
+          svg
+            .selectAll("mylayers")
+            .data(stackedData)
+            .enter()
+            .append("path")
+            .attr("class", "myArea")
+            .style("fill", function (d) {
+              return color(d.key);
+            })
+            .attr("d", area)
+            .on("mouseover", mouseover)
+            .on("mousemove", mousemove)
+            .on("mouseleave", mouseleave);
+        }
+      );
+    </script>
+
+    <script>
+      // set the dimensions and margins of the graph
+      let wordcloudMargin = { top: 10, right: 10, bottom: 10, left: 10 };
+      width =
+        window.innerWidth / 2 -
+        wordcloudMargin.left -
+        wordcloudMargin.right -
+        overAllMargin;
+      height =
+        window.innerHeight / 2 -
+        wordcloudMargin.top -
+        wordcloudMargin.bottom -
+        overAllMargin;
+
+      // append the svg object to the body of the page
+      let wordcloudSVG = d3
+        .select("#wordcloud")
+        .append("svg")
+        .attr("width", width + wordcloudMargin.left + wordcloudMargin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr(
+          "transform",
+          "translate(" + wordcloudMargin.left + "," + wordcloudMargin.top + ")"
+        );
+
+      let words = wordcloudData.sort((a, b) => b.size - a.size).slice(0, 4000);
+      console.log(words);
+
+      let maxSize = words[0].size;
+
+      function scaleValue(value, from, to) {
+        var scale = (to[1] - to[0]) / (from[1] - from[0]);
+        var capped = Math.min(from[1], Math.max(from[0], value)) - from[0];
+        return ~~(capped * scale + to[0]);
+      }
+
+      // Constructs a new cloud layout instance. It run an algorithm to find the position of words that suits your requirements
+      // Wordcloud features that are different from one word to the other must be here
+      var layout = d3.layout
+        .cloud()
+        .size([width, height])
+        .words(
+          words.map(function (d) {
+            return {
+              text: d.word,
+              size: scaleValue(d.size, [0, maxSize], [0, 190]),
+            };
+          })
+        )
+        .padding(10) //space between words
+        .rotate(function () {
+          return ~~(Math.random() * 2) * 90;
+        })
+        .fontSize(function (d) {
+          return d.size;
+        }) // font size of words
+        .on("end", draw);
+      layout.start();
+
+      // This function takes the output of 'layout' above and draw the words
+      // Wordcloud features that are THE SAME from one word to the other can be here
+      function draw(words) {
+        wordcloudSVG
+          .append("g")
+          .attr(
+            "transform",
+            "translate(" +
+              layout.size()[0] / 2 +
+              "," +
+              layout.size()[1] / 2 +
+              ")"
+          )
+          .selectAll("text")
+          .data(words)
+          .enter()
+          .append("text")
+          .style("font-size", function (d) {
+            return d.size;
+          })
+          .style("fill", "#0038B8")
+          .attr("text-anchor", "middle")
+          .style("font-family", "Impact")
+          .attr("transform", function (d) {
+            return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+          })
+          .text(function (d) {
+            return d.text;
+          });
+      }
     </script>
   </body>
 </html>
